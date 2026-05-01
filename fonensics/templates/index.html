@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>OSINT Forensics</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:#0d0d0d;color:#e0e0e0;font-family:'Segoe UI',sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:36px 20px}
+    h1{font-size:1.7rem;color:#00e5ff;letter-spacing:2px;margin-bottom:4px}
+    .subtitle{color:#444;font-size:0.8rem;margin-bottom:28px;letter-spacing:1px}
+
+    /* Phase tabs */
+    .phase-tabs{display:flex;gap:0;width:100%;max-width:860px;margin-bottom:24px;border-bottom:1px solid #1e1e1e}
+    .phase-tab{padding:10px 24px;font-size:0.8rem;letter-spacing:1px;color:#444;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.2s}
+    .phase-tab.active{color:#00e5ff;border-bottom-color:#00e5ff}
+
+    /* Panels */
+    .panel{width:100%;max-width:860px;display:none}
+    .panel.active{display:block}
+
+    /* Search row */
+    .search-row{display:flex;gap:8px;margin-bottom:10px}
+    .search-row input{flex:1;padding:12px 16px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;color:#fff;font-size:0.95rem;outline:none;transition:border 0.2s}
+    .search-row input:focus{border-color:#00e5ff}
+    .btn{padding:12px 20px;border:none;border-radius:8px;font-weight:700;font-size:0.85rem;cursor:pointer;transition:background 0.2s;white-space:nowrap}
+    .btn-cyan{background:#00e5ff;color:#000}.btn-cyan:hover{background:#00c8e0}
+    .btn-cyan:disabled{background:#1a1a1a;color:#444;cursor:not-allowed}
+    .btn-red{background:#ff4444;color:#fff;display:none}.btn-red:hover{background:#cc2222}
+    .btn-green{background:#00c853;color:#000}.btn-green:hover{background:#00a844}
+    .btn-green:disabled{background:#1a1a1a;color:#444;cursor:not-allowed}
+
+    /* Filter */
+    .filter-toggle{font-size:0.75rem;color:#444;cursor:pointer;margin-bottom:16px;user-select:none}
+    .filter-toggle:hover{color:#00e5ff}
+    #site-filter-panel{display:none;background:#111;border:1px solid #1e1e1e;border-radius:8px;padding:14px;margin-bottom:16px}
+    .filter-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+    .filter-header span{font-size:0.75rem;color:#444}
+    .filter-actions{display:flex;gap:6px}
+    .filter-actions button{font-size:0.7rem;padding:3px 8px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:4px;color:#888;cursor:pointer}
+    .filter-actions button:hover{border-color:#00e5ff;color:#00e5ff}
+    #site-search{width:100%;padding:7px 12px;margin-bottom:8px;background:#0d0d0d;border:1px solid #2a2a2a;border-radius:6px;color:#fff;font-size:0.78rem;outline:none}
+    #site-search:focus{border-color:#00e5ff}
+    .site-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:5px;max-height:220px;overflow-y:auto}
+    .site-chip{display:flex;align-items:center;gap:5px;padding:4px 8px;border-radius:4px;background:#1a1a1a;border:1px solid #222;cursor:pointer;font-size:0.72rem;color:#777;transition:all 0.15s;user-select:none}
+    .site-chip:hover{border-color:#00e5ff;color:#fff}
+    .site-chip.selected{background:#002a30;border-color:#00e5ff;color:#00e5ff}
+    .site-chip input{display:none}
+
+    /* Status + log */
+    #status{font-size:0.75rem;color:#555;margin-bottom:10px;min-height:16px}
+    .log-box{background:#0a0a0a;border:1px solid #1a1a1a;border-radius:8px;padding:12px;font-family:'Consolas',monospace;font-size:0.72rem;height:150px;overflow-y:auto;display:none;margin-bottom:18px}
+    .log-found{color:#00e5ff}.log-var{color:#555}.log-error{color:#ff4444}.log-done{color:#44ff88}.log-wb{color:#ffaa00}.log-profile{color:#aa88ff}.log-exif{color:#ff88aa}.log-corr{color:#88ffcc}
+
+    /* Section cards */
+    .section{background:#111;border:1px solid #1e1e1e;border-radius:8px;padding:16px;margin-bottom:12px}
+    .section h3{font-size:0.68rem;letter-spacing:2px;color:#444;text-transform:uppercase;margin-bottom:12px}
+
+    /* Account rows */
+    .account-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #1a1a1a;animation:fadeIn 0.25s ease}
+    .account-row:last-child{border-bottom:none}
+    .site-badge{background:#0d0d0d;border:1px solid #1e1e1e;border-radius:4px;padding:3px 8px;font-size:0.7rem;color:#00e5ff;min-width:100px;text-align:center;flex-shrink:0}
+    .account-row a{color:#777;font-size:0.78rem;text-decoration:none;word-break:break-all;flex:1}
+    .account-row a:hover{color:#fff}
+    .check-col{width:20px;flex-shrink:0}
+    .check-col input{accent-color:#00e5ff;width:14px;height:14px;cursor:pointer}
+
+    /* Score */
+    .score-wrap{display:flex;align-items:center;gap:20px;padding:4px 0}
+    .score-circle{width:76px;height:76px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:1.4rem;font-weight:700;border:3px solid;flex-shrink:0}
+    .score-circle span{font-size:0.58rem;font-weight:400;color:#555}
+    .risk-HIGH{border-color:#ff4444;color:#ff4444}.risk-MEDIUM{border-color:#ffaa00;color:#ffaa00}
+    .risk-LOW{border-color:#00e5ff;color:#00e5ff}.risk-MINIMAL{border-color:#44ff88;color:#44ff88}
+    .score-info h2{font-size:0.95rem;margin-bottom:3px}
+    .score-info p{font-size:0.75rem;color:#555}
+
+    /* Evidence */
+    .signal-row{padding:6px 0;font-size:0.78rem;color:#888;border-bottom:1px solid #1a1a1a;display:flex;gap:8px}
+    .signal-row:last-child{border-bottom:none}
+    .signal-row::before{content:"+";color:#00e5ff;font-weight:700}
+    .evidence-card{background:#0d0d0d;border:1px solid #1e1e1e;border-radius:6px;padding:12px;margin-bottom:8px}
+    .evidence-card:last-child{margin-bottom:0}
+    .ev-type{font-size:0.65rem;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px}
+    .ev-HIGH{color:#ff4444}.ev-MEDIUM{color:#ffaa00}.ev-LOW{color:#00e5ff}
+    .ev-detail{font-size:0.8rem;color:#ccc}
+    .ev-link{font-size:0.72rem;color:#00e5ff;text-decoration:none}
+    .ev-link:hover{text-decoration:underline}
+
+    /* Timeline */
+    .timeline-row{display:grid;grid-template-columns:120px 1fr 1fr auto;gap:10px;padding:8px 0;border-bottom:1px solid #1a1a1a;font-size:0.75rem;align-items:center}
+    .timeline-row:last-child{border-bottom:none}
+    .tl-site{color:#00e5ff;font-weight:600}
+    .tl-date{color:#888}
+    .tl-snaps{color:#555}
+    .tl-link{color:#444;font-size:0.68rem;text-decoration:none}
+    .tl-link:hover{color:#00e5ff}
+
+    /* Image upload */
+    .upload-area{border:2px dashed #2a2a2a;border-radius:8px;padding:20px;text-align:center;cursor:pointer;transition:border 0.2s;margin-bottom:12px}
+    .upload-area:hover{border-color:#00e5ff}
+    .upload-area input{display:none}
+    .upload-area p{font-size:0.8rem;color:#555}
+    .upload-area.has-file p{color:#00e5ff}
+
+    /* Indicators grid */
+    .indicators{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+    .indicator-card{background:#0d0d0d;border:1px solid #1a1a1a;border-radius:6px;padding:10px}
+    .indicator-card .label{font-size:0.62rem;color:#444;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+    .indicator-card .value{font-size:0.85rem;color:#ccc}
+
+    .no-data{color:#444;font-size:0.78rem;text-align:center;padding:16px 0}
+    .analyze-bar{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+    .analyze-bar label{font-size:0.78rem;color:#555}
+
+    @keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+  </style>
+</head>
+<body>
+
+<h1>OSINT FORENSICS</h1>
+<p class="subtitle">Social Media Forensics & Identity Correlation</p>
+
+<div class="phase-tabs">
+  <div class="phase-tab active" onclick="switchTab('search')">1. Search Accounts</div>
+  <div class="phase-tab" id="tab-analyze" onclick="switchTab('analyze')">2. Deep Analysis</div>
+</div>
+
+<!-- ═══════════════════════════════ PHASE 1 ═══════════════════════════════ -->
+<div class="panel active" id="panel-search">
+
+  <div class="search-row">
+    <input type="text" id="name-input" placeholder="Enter full name " autocomplete="off"/>
+    <button class="btn btn-cyan" id="search-btn" onclick="startSearch()">Search</button>
+    <button class="btn btn-red"  id="stop-btn"   onclick="stopSearch()">Stop</button>
+  </div>
+
+  <div class="filter-toggle" onclick="toggleFilter()">&#9881; Filter sites &mdash; <span id="filter-label">All sites</span></div>
+  <div id="site-filter-panel">
+    <div class="filter-header">
+      <span id="selected-count">0 selected (empty = all)</span>
+      <div class="filter-actions">
+        <button onclick="selectAll()">All</button>
+        <button onclick="clearAll()">Clear</button>
+      </div>
+    </div>
+    <input type="text" id="site-search" placeholder="Filter..." oninput="filterSites()"/>
+    <div class="site-grid" id="site-grid"><div style="color:#444;font-size:0.75rem">Loading...</div></div>
+  </div>
+
+  <div id="status"></div>
+  <div class="log-box" id="log1"></div>
+
+  <div id="results1"></div>
+
+  <!-- Analyze button shown after accounts found -->
+  <div id="analyze-bar" style="display:none" class="analyze-bar">
+    <div class="upload-area" id="upload-area" onclick="document.getElementById('img-input').click()">
+      <input type="file" id="img-input" accept="image/*" onchange="onImageSelected(this)"/>
+      <p id="upload-label">&#128247; Upload a profile image for EXIF analysis (optional)</p>
+    </div>
+    <button class="btn btn-green" id="analyze-btn" onclick="startAnalysis()">
+      Analyze Selected Accounts
+    </button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ PHASE 2 ═══════════════════════════════ -->
+<div class="panel" id="panel-analyze">
+  <div id="status2"></div>
+  <div class="log-box" id="log2"></div>
+  <div id="results2"></div>
+</div>
+
+<script>
+  let evtSource  = null;
+  let searchId   = null;
+  let analyzeId  = null;
+  let foundAccounts = {};
+  let currentUsername = "";
+
+  // Load sites
+  fetch("/sites").then(r=>r.json()).then(d=>{
+    renderSiteGrid(d.sites);
+  });
+
+  function switchTab(tab) {
+    document.querySelectorAll(".phase-tab").forEach((t,i)=>t.classList.toggle("active", (i===0&&tab==="search")||(i===1&&tab==="analyze")));
+    document.getElementById("panel-search").classList.toggle("active", tab==="search");
+    document.getElementById("panel-analyze").classList.toggle("active", tab==="analyze");
+  }
+
+  // ── Site filter ──────────────────────────────────────────────────────────
+  function renderSiteGrid(sites) {
+    document.getElementById("site-grid").innerHTML = sites.map(s=>`
+      <label class="site-chip" id="chip-${s.replace(/\s/g,'_')}">
+        <input type="checkbox" value="${s}" onchange="updateCount()"/> ${s}
+      </label>`).join("");
+  }
+  function toggleFilter(){const p=document.getElementById("site-filter-panel");p.style.display=p.style.display==="block"?"none":"block"}
+  function filterSites(){const q=document.getElementById("site-search").value.toLowerCase();document.querySelectorAll(".site-chip").forEach(c=>{c.style.display=c.querySelector("input").value.toLowerCase().includes(q)?"":"none"})}
+  function selectAll(){document.querySelectorAll(".site-chip input").forEach(cb=>{cb.checked=true;cb.closest(".site-chip").classList.add("selected")});updateCount()}
+  function clearAll(){document.querySelectorAll(".site-chip input").forEach(cb=>{cb.checked=false;cb.closest(".site-chip").classList.remove("selected")});updateCount()}
+  function updateCount(){
+    document.querySelectorAll(".site-chip").forEach(c=>c.classList.toggle("selected",c.querySelector("input").checked));
+    const n=document.querySelectorAll(".site-chip input:checked").length;
+    document.getElementById("selected-count").textContent=n===0?"0 selected (empty = all)":`${n} site(s) selected`;
+    document.getElementById("filter-label").textContent=n===0?"All sites":`${n} selected`;
+  }
+  function getSelectedSites(){return[...document.querySelectorAll(".site-chip input:checked")].map(c=>c.value)}
+
+  // ── Phase 1: Search ──────────────────────────────────────────────────────
+  function startSearch() {
+    const name = document.getElementById("name-input").value.trim();
+    if (!name) return;
+    currentUsername = name;
+    foundAccounts = {};
+
+    document.getElementById("results1").innerHTML = "";
+    document.getElementById("analyze-bar").style.display = "none";
+    const log = document.getElementById("log1");
+    log.innerHTML = ""; log.style.display = "block";
+    setStatus(""); 
+    document.getElementById("search-btn").disabled = true;
+    document.getElementById("stop-btn").style.display = "inline-block";
+    if (evtSource) evtSource.close();
+
+    const body = new URLSearchParams();
+    body.append("full_name", name);
+    getSelectedSites().forEach(s => body.append("sites", s));
+
+    fetch("/search", {method:"POST", body})
+      .then(r=>r.json())
+      .then(d=>{
+        if (d.error){setStatus("Error: "+d.error);return;}
+        searchId = d.search_id;
+        listenStream(searchId, "log1", onSearchMsg);
+      });
+  }
+
+  function stopSearch() {
+    if (!searchId) return;
+    fetch(`/stop/${searchId}`, {method:"POST"});
+    document.getElementById("stop-btn").style.display = "none";
+    setStatus("Stopping...");
+  }
+
+  function onSearchMsg(msg) {
+    if (msg.type === "log") {
+      appendLog("log1", msg.msg);
+      setStatus(msg.msg);
+      if (msg.msg.startsWith("[FOUND]")) {
+        const body  = msg.msg.slice(8);
+        const colon = body.indexOf(": ");
+        const site  = body.slice(0, colon);
+        const url   = body.slice(colon + 2);
+        foundAccounts[site] = url;
+        addLiveAccount(site, url);
+      }
+    } else if (msg.type === "done") {
+      foundAccounts = msg.accounts || foundAccounts;
+      currentUsername = msg.username || currentUsername;
+      document.getElementById("search-btn").disabled = false;
+      document.getElementById("stop-btn").style.display = "none";
+      const n = Object.keys(foundAccounts).length;
+      setStatus(`Done — ${n} account(s) found. Select accounts below then click Analyze.`);
+      if (n > 0) document.getElementById("analyze-bar").style.display = "flex";
+    }
+  }
+
+  function addLiveAccount(site, url) {
+    const r1 = document.getElementById("results1");
+    if (!document.getElementById("live-accounts")) {
+      const sec = document.createElement("div");
+      sec.className = "section";
+      sec.innerHTML = `<h3>Accounts Found &mdash; <span id="acc-count">0</span></h3>
+        <div style="font-size:0.7rem;color:#444;margin-bottom:8px">Check accounts to include in deep analysis</div>
+        <div id="live-accounts"></div>`;
+      r1.appendChild(sec);
+    }
+    const container = document.getElementById("live-accounts");
+    document.getElementById("acc-count").textContent = container.children.length + 1;
+    const row = document.createElement("div");
+    row.className = "account-row";
+    row.innerHTML = `
+      <div class="check-col"><input type="checkbox" checked data-site="${site}" data-url="${url}"/></div>
+      <span class="site-badge">${site}</span>
+      <a href="${url}" target="_blank">${url}</a>`;
+    container.appendChild(row);
+  }
+
+  // ── Image upload ─────────────────────────────────────────────────────────
+  function onImageSelected(input) {
+    if (input.files[0]) {
+      document.getElementById("upload-label").textContent = "Image: " + input.files[0].name;
+      document.getElementById("upload-area").classList.add("has-file");
+    }
+  }
+
+  // ── Phase 2: Deep Analysis ───────────────────────────────────────────────
+  function startAnalysis() {
+    // Get selected accounts from checkboxes
+    const selected = {};
+    document.querySelectorAll("#live-accounts input[type=checkbox]:checked").forEach(cb => {
+      selected[cb.dataset.site] = cb.dataset.url;
+    });
+    if (Object.keys(selected).length === 0) {
+      alert("Select at least one account to analyze.");
+      return;
+    }
+
+    switchTab("analyze");
+    const log2 = document.getElementById("log2");
+    log2.innerHTML = ""; log2.style.display = "block";
+    document.getElementById("results2").innerHTML = "";
+    document.getElementById("status2").textContent = "Running deep analysis...";
+    document.getElementById("analyze-btn").disabled = true;
+
+    const formData = new FormData();
+    formData.append("username", currentUsername);
+    formData.append("selected_accounts", JSON.stringify(selected));
+    const imgFile = document.getElementById("img-input").files[0];
+    if (imgFile) formData.append("image", imgFile);
+
+    fetch("/analyze", {method:"POST", body: formData})
+      .then(r=>r.json())
+      .then(d=>{
+        if (d.error){document.getElementById("status2").textContent="Error: "+d.error;return;}
+        analyzeId = d.analyze_id;
+        listenStream(analyzeId, "log2", onAnalyzeMsg);
+      });
+  }
+
+  function onAnalyzeMsg(msg) {
+    if (msg.type === "log") {
+      appendLog("log2", msg.msg);
+      document.getElementById("status2").textContent = msg.msg;
+    } else if (msg.type === "done") {
+      document.getElementById("analyze-btn").disabled = false;
+      document.getElementById("status2").textContent =
+        `Analysis complete — Confidence: ${msg.result.confidence_score}/100`;
+      renderAnalysisResult(msg.result);
+    } else if (msg.type === "error") {
+      document.getElementById("analyze-btn").disabled = false;
+      document.getElementById("status2").textContent = "Error: " + msg.msg;
+    }
+  }
+
+  function renderAnalysisResult(r) {
+    const container = document.getElementById("results2");
+    const score  = r.confidence_score || 0;
+    const risk   = r.risk_level || "MINIMAL";
+    const accN   = Object.keys(r.accounts_found || {}).length;
+
+    let html = `
+      <!-- Score -->
+      <div class="section">
+        <div class="score-wrap">
+          <div class="score-circle risk-${risk}">${score}<span>/100</span></div>
+          <div class="score-info">
+            <h2>Risk: ${risk}</h2>
+            <p>${accN} account(s) analyzed</p>
+            <p>${(r.signals||[]).length} correlation signal(s)</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Evidence -->
+      <div class="section">
+        <h3>Evidence Collected</h3>
+        ${(r.evidence||[]).length === 0
+          ? `<p class="no-data">No strong evidence signals detected.</p>`
+          : (r.evidence||[]).map(e=>`
+            <div class="evidence-card">
+              <div class="ev-type ev-${e.severity}">${e.type.replace(/_/g,' ')}</div>
+              <div class="ev-detail">${e.detail}</div>
+              ${e.maps_url ? `<a class="ev-link" href="${e.maps_url}" target="_blank">View on Google Maps</a>` : ""}
+            </div>`).join("")
+        }
+      </div>
+
+      <!-- Signals -->
+      <div class="section">
+        <h3>Correlation Signals</h3>
+        ${(r.signals||[]).length === 0
+          ? `<p class="no-data">No signals.</p>`
+          : (r.signals||[]).map(s=>`<div class="signal-row">${s}</div>`).join("")
+        }
+      </div>
+
+      <!-- Wayback Timeline -->
+      <div class="section">
+        <h3>Wayback Machine Timeline</h3>
+        ${(r.timeline||[]).length === 0
+          ? `<p class="no-data">No archive history found for any account.</p>`
+          : `<div class="timeline-row" style="color:#444;font-size:0.65rem;letter-spacing:1px">
+               <span>SITE</span><span>FIRST SEEN</span><span>LAST SEEN</span><span>SNAPS</span>
+             </div>` +
+            (r.timeline||[]).map(t=>`
+              <div class="timeline-row">
+                <span class="tl-site">${t.site}</span>
+                <span class="tl-date">${t.first_seen || "—"}</span>
+                <span class="tl-date">${t.last_seen  || "—"}</span>
+                <span class="tl-snaps">${t.total_snaps || 0}</span>
+              </div>
+              ${(t.snapshots||[]).map(s=>`
+                <div style="padding:2px 0 2px 120px;font-size:0.68rem">
+                  <a class="tl-link" href="${s.wayback_url}" target="_blank">${s.timestamp}</a>
+                </div>`).join("")}
+            `).join("")
+        }
+      </div>
+
+      <!-- EXIF -->
+      <div class="section">
+        <h3>EXIF Metadata</h3>
+        ${!r.exif || Object.keys(r.exif).length === 0
+          ? `<p class="no-data">No image uploaded or no EXIF data found.</p>`
+          : `<div class="indicators">
+              ${r.exif.gps ? `
+                <div class="indicator-card">
+                  <div class="label">GPS Coordinates</div>
+                  <div class="value">${r.exif.gps.lat}, ${r.exif.gps.lon}</div>
+                </div>
+                <div class="indicator-card">
+                  <div class="label">Location</div>
+                  <div class="value"><a class="ev-link" href="${r.exif.gps_maps_url}" target="_blank">View on Maps</a></div>
+                </div>` : ""}
+              ${r.exif.capture_time ? `
+                <div class="indicator-card">
+                  <div class="label">Capture Time</div>
+                  <div class="value">${r.exif.capture_time}</div>
+                </div>` : ""}
+              ${r.exif.camera_model ? `
+                <div class="indicator-card">
+                  <div class="label">Camera</div>
+                  <div class="value">${r.exif.camera_make||""} ${r.exif.camera_model}</div>
+                </div>` : ""}
+              ${r.exif.software ? `
+                <div class="indicator-card">
+                  <div class="label">Software</div>
+                  <div class="value">${r.exif.software}</div>
+                </div>` : ""}
+            </div>`
+        }
+      </div>
+
+      <!-- Profile Images -->
+      ${(r.profile_images||[]).length >= 2 ? `
+      <div class="section">
+        <h3>Profile Images Comparison</h3>
+        <div class="indicators">
+          ${r.profile_images.map(p=>`
+            <div class="indicator-card">
+              <div class="label">${p.url ? p.url.split("/")[2] : ""}</div>
+              ${p.image ? `<img src="${p.image}" style="width:60px;height:60px;object-fit:cover;border-radius:50%;margin:6px 0;border:2px solid #1e1e1e"/>` : ""}
+              <div class="value" style="font-size:0.65rem;color:#444">${p.hash ? p.hash.slice(0,12)+"..." : "no hash"}</div>
+            </div>`).join("")}
+        </div>
+      </div>` : ""}`;
+
+    container.innerHTML = html;
+  }
+
+  // ── Shared stream listener ───────────────────────────────────────────────
+  function listenStream(sid, logId, handler) {
+    if (evtSource) evtSource.close();
+    evtSource = new EventSource(`/stream/${sid}`);
+    evtSource.onmessage = function(e) {
+      const msg = JSON.parse(e.data);
+      handler(msg);
+      if (msg.type === "done" || msg.type === "error") evtSource.close();
+    };
+  }
+
+  function appendLog(logId, msg) {
+    const box = document.getElementById(logId);
+    const line = document.createElement("div");
+    line.className = msg.startsWith("[FOUND]")   ? "log-found"
+                   : msg.startsWith("[VAR]")     ? "log-var"
+                   : msg.startsWith("[DONE]")    ? "log-done"
+                   : msg.startsWith("[WAYBACK]") ? "log-wb"
+                   : msg.startsWith("[PROFILE]") ? "log-profile"
+                   : msg.startsWith("[EXIF]")    ? "log-exif"
+                   : msg.startsWith("[CORR")     ? "log-corr"
+                   : msg.startsWith("[ERROR]")   ? "log-error"
+                   : "";
+    line.textContent = msg;
+    box.appendChild(line);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function setStatus(msg) { document.getElementById("status").textContent = msg; }
+
+  document.getElementById("name-input").addEventListener("keydown", e => {
+    if (e.key === "Enter") startSearch();
+  });
+</script>
+</body>
+</html>
